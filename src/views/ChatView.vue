@@ -106,15 +106,26 @@ async function sendWithHistory(history: Message[]) {
 
   busy.value = true;
   error.value = '';
+  let placeholder: Message | undefined;
   try {
+    placeholder = await addMessage(currentChat.value.id, 'assistant', 'Waiting for response ...');
+    await reloadCurrent();
+
     const reply = await requestReply(settings.apiKey, settings.preset, history);
-    await addMessage(currentChat.value.id, 'assistant', reply.content, {
+    await updateMessage({
+      ...placeholder,
+      content: reply.content,
       model: reply.model,
       totalTokens: reply.totalTokens,
     });
     await reloadCurrent();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'The OpenRouter request failed.';
+    const message = err instanceof Error ? err.message : 'The OpenRouter request failed.';
+    error.value = message;
+    if (placeholder) {
+      await updateMessage({ ...placeholder, content: `Error: ${message}` });
+      await reloadCurrent();
+    }
   } finally {
     busy.value = false;
   }
@@ -123,11 +134,16 @@ async function sendWithHistory(history: Message[]) {
 async function sendPrompt() {
   const content = prompt.value.trim();
   if (!content || !currentChat.value || busy.value) return;
+  busy.value = true;
   prompt.value = '';
-  const userMessage = await addMessage(currentChat.value.id, 'user', content);
-  await setLastSentAt(session.namespace, userMessage.createdAt);
-  await reloadCurrent();
-  await sendWithHistory(messages.value);
+  try {
+    const userMessage = await addMessage(currentChat.value.id, 'user', content);
+    await setLastSentAt(session.namespace, userMessage.createdAt);
+    await reloadCurrent();
+    await sendWithHistory(messages.value);
+  } finally {
+    busy.value = false;
+  }
 }
 
 function startEdit(message: Message) {
@@ -238,6 +254,7 @@ onMounted(ensureChat);
           rows="4"
           placeholder="Type a text prompt"
           aria-label="Text prompt"
+          :disabled="busy"
           @keydown.enter.stop
         />
         <button type="submit" :disabled="busy || !prompt.trim()">{{ busy ? 'Sending' : 'Send' }}</button>
@@ -245,4 +262,3 @@ onMounted(ensureChat);
     </main>
   </div>
 </template>
-
