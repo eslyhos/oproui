@@ -111,8 +111,13 @@ export async function getMessages(chatId: string): Promise<Message[]> {
   return messages.sort((a, b) => a.createdAt - b.createdAt);
 }
 
-export async function addMessage(chatId: string, role: Message['role'], content: string): Promise<Message> {
-  const message: Message = { id: uid('msg'), chatId, role, content, createdAt: Date.now() };
+export async function addMessage(
+  chatId: string,
+  role: Message['role'],
+  content: string,
+  metadata: Pick<Message, 'model' | 'totalTokens'> = {},
+): Promise<Message> {
+  const message: Message = { id: uid('msg'), chatId, role, content, createdAt: Date.now(), ...metadata };
   await store('messages', 'readwrite', (s) => s.put(message));
   await touchChat(chatId);
   return message;

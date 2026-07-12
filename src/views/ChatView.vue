@@ -35,6 +35,7 @@ const collapsed = ref(localStorage.getItem('openrouter-ui-sidebar-collapsed') ==
 const messageList = ref<HTMLElement | null>(null);
 
 const activeChatId = computed(() => typeof route.params.chatId === 'string' ? route.params.chatId : '');
+const totalTokens = computed(() => messages.value.reduce((sum, message) => sum + (message.totalTokens ?? 0), 0));
 
 function setCollapsed(value: boolean) {
   collapsed.value = value;
@@ -107,7 +108,10 @@ async function sendWithHistory(history: Message[]) {
   error.value = '';
   try {
     const reply = await requestReply(settings.apiKey, settings.preset, history);
-    await addMessage(currentChat.value.id, 'assistant', reply);
+    await addMessage(currentChat.value.id, 'assistant', reply.content, {
+      model: reply.model,
+      totalTokens: reply.totalTokens,
+    });
     await reloadCurrent();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'The OpenRouter request failed.';
@@ -157,9 +161,15 @@ function formatStamp(timestamp: number): string {
 function exportChat() {
   if (!currentChat.value) return;
   const text = messages.value
-    .map((message) => `[${formatStamp(message.createdAt)}]\n[${message.role === 'user' ? session.username : 'Reply'}]\n[${message.content}]`)
+    .map((message) => [
+      ...(message.model ? [`[${message.model}]`] : []),
+      `[${formatStamp(message.createdAt)}]`,
+      `[${message.role === 'user' ? session.username : 'Reply'}]`,
+      `[${message.content}]`,
+    ].join('\n'))
     .join('\n\n');
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const exportText = totalTokens.value > 0 ? `${text}\n\n[total_tokens: ${totalTokens.value}]` : text;
+  const blob = new Blob([exportText], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -188,16 +198,21 @@ onMounted(ensureChat);
     <main class="chat-page">
       <header class="chat-header">
         <h1>{{ currentChat?.title || 'Chat' }}</h1>
-        <button type="button" class="icon-text-button" title="Export current chat" aria-label="Export current chat" @click="exportChat">
-          <span aria-hidden="true">Download</span>
-          <span>Export</span>
-        </button>
+        <div class="chat-header-actions">
+          <div v-if="totalTokens > 0" class="token-total" title="Total tokens">total_tokens: {{ totalTokens }}</div>
+          <button type="button" class="icon-text-button" title="Export current chat" aria-label="Export current chat" @click="exportChat">
+            <span aria-hidden="true">Download</span>
+            <span>Export</span>
+          </button>
+        </div>
       </header>
 
       <section ref="messageList" class="message-list" aria-label="Current chat messages">
         <div v-if="messages.length === 0" class="empty-state">No messages yet.</div>
         <article v-for="message in messages" :key="message.id" class="message" :class="message.role">
-          <div class="message-meta">{{ message.role === 'user' ? session.username : 'Reply' }} - {{ formatStamp(message.createdAt) }}</div>
+          <div class="message-meta">
+            <span v-if="message.model">{{ message.model }} - </span>{{ message.role === 'user' ? session.username : 'Reply' }} - {{ formatStamp(message.createdAt) }}
+          </div>
           <textarea
             v-if="editingId === message.id"
             v-model="editDraft"

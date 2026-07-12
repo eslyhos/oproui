@@ -2,7 +2,13 @@
 
 const FALLBACK_OPENROUTER_PRESET = 'openrouter/auto';
 
-export async function requestReply(apiKey: string, preset: string, messages: Message[]): Promise<string> {
+export interface OpenRouterReply {
+  content: string;
+  model?: string;
+  totalTokens?: number;
+}
+
+export async function requestReply(apiKey: string, preset: string, messages: Message[]): Promise<OpenRouterReply> {
   const model = preset.trim() || FALLBACK_OPENROUTER_PRESET;
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -26,6 +32,12 @@ export async function requestReply(apiKey: string, preset: string, messages: Mes
 
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    model?: string;
+    usage?: { total_tokens?: number };
   };
-  return data.choices?.[0]?.message?.content?.trim() || 'No response content was returned.';
+  return {
+    content: data.choices?.[0]?.message?.content?.trim() || 'No response content was returned.',
+    model: data.model,
+    totalTokens: data.usage?.total_tokens,
+  };
 }

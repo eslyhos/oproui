@@ -14,6 +14,8 @@ export interface Message {
   role: Role;
   content: string;
   createdAt: number;
+  model?: string;
+  totalTokens?: number;
 }
 
 export interface UserSettings {
