@@ -9,8 +9,6 @@ export async function requestReply(apiKey: string, preset: string, messages: Mes
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': window.location.origin,
-      'X-OpenRouter-Title': 'OpenRouter Local UI',
     },
     body: JSON.stringify({
       model,
