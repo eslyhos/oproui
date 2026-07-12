@@ -178,10 +178,11 @@ function exportChat() {
   if (!currentChat.value) return;
   const text = messages.value
     .map((message) => [
+      `--------------------`,
       ...(message.model ? [`[${message.model}]`] : []),
       `[${formatStamp(message.createdAt)}]`,
       `[${message.role === 'user' ? session.username : 'Reply'}]`,
-      `[${message.content}]`,
+      `${message.content}`,
     ].join('\n'))
     .join('\n\n');
   const exportText = totalTokens.value > 0 ? `${text}\n\n[total_tokens: ${totalTokens.value}]` : text;
