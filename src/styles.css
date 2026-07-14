@@ -324,21 +324,25 @@ textarea {
 
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid #d9d9d2;
   background: #eeefe9;
 }
 
-.composer textarea,
 .composer .error {
   grid-column: 1 / -1;
 }
 
+.composer textarea {
+  grid-column: 1;
+}
+
 .composer button {
   grid-column: 2;
-  min-width: 104px;
+  min-width: 0;
+  width: 100%;
 }
 
 .error {
@@ -438,12 +442,12 @@ textarea {
   }
 
   .composer {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
     padding: 12px;
   }
 
   .composer button {
-    grid-column: 1;
+    grid-column: 2;
     width: 100%;
   }
 
