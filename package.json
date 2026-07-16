@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.2.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "pinia": "^2.3.1",
     "typescript": "^5.8.3",
@@ -17,5 +19,8 @@
     "vue-router": "^4.5.1",
     "vue-tsc": "^2.2.10"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "vitest": "^4.1.10"
+  }
 }

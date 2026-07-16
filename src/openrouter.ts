@@ -1,43 +1,37 @@
-﻿import type { Message } from './types';
+import type { ChatMessage, UserSettings } from './types';
 
-const FALLBACK_OPENROUTER_PRESET = 'openrouter/auto';
+export interface OpenRouterReply { content: string; model: string }
 
-export interface OpenRouterReply {
-  content: string;
-  model?: string;
-  totalTokens?: number;
+function errorText(payload: unknown, fallback: string): string {
+  if (typeof payload === 'object' && payload && 'error' in payload) {
+    const error = (payload as { error?: unknown }).error;
+    if (typeof error === 'string') return error;
+    if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') return error.message;
+  }
+  return fallback;
 }
 
-export async function requestReply(apiKey: string, preset: string, messages: Message[]): Promise<OpenRouterReply> {
-  const model = preset.trim() || FALLBACK_OPENROUTER_PRESET;
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `OpenRouter request failed with ${response.status}`);
+export async function requestReply(settings: UserSettings, messages: ChatMessage[]): Promise<OpenRouterReply> {
+  const body: { model: string; messages: Array<{ role: string; content: string }>; preset?: string } = {
+    model: settings.model,
+    messages: messages.map(({ role, content }) => ({ role, content })),
+  };
+  if (settings.preset.trim()) body.preset = settings.preset.trim();
+  let response: Response;
+  try {
+    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'OproUI' },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Network request failed.');
   }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    model?: string;
-    usage?: { total_tokens?: number };
-  };
-  return {
-    content: data.choices?.[0]?.message?.content?.trim() || 'No response content was returned.',
-    model: data.model,
-    totalTokens: data.usage?.total_tokens,
-  };
+  let payload: unknown;
+  try { payload = await response.json(); } catch { payload = undefined; }
+  if (!response.ok) throw new Error(errorText(payload, `OpenRouter request failed (${response.status}).`));
+  const data = payload as { choices?: Array<{ message?: { content?: unknown } }>; model?: unknown };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) throw new Error('OpenRouter returned an empty or malformed response.');
+  return { content: content.trim(), model: typeof data.model === 'string' && data.model ? data.model : settings.model };
 }

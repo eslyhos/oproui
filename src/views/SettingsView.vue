@@ -1,80 +1,51 @@
-﻿<script setup lang="ts">
+<script setup lang='ts'>
 import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import AppSidebar from '../components/AppSidebar.vue';
-import { createChat, deleteChat, getChats, getSettings, renameChat, saveSettings } from '../db';
+import SecureHeader from '../components/SecureHeader.vue';
+import { getSettings, saveSettings } from '../db';
 import { useSessionStore } from '../stores/session';
-import type { Chat } from '../types';
 
 const session = useSessionStore();
-const router = useRouter();
-const chats = ref<Chat[]>([]);
-const collapsed = ref(localStorage.getItem('openrouter-ui-sidebar-collapsed') === 'true');
 const apiKey = ref('');
-const preset = ref('openrouter/auto');
-const saved = ref(false);
+const preset = ref('');
+const model = ref('openrouter/auto');
+const status = ref('');
+const error = ref('');
 
-function setCollapsed(value: boolean) {
-  collapsed.value = value;
-  localStorage.setItem('openrouter-ui-sidebar-collapsed', String(value));
-}
-
-async function load() {
-  const settings = await getSettings(session.namespace);
-  chats.value = await getChats(session.namespace);
-  apiKey.value = settings.apiKey;
-  preset.value = settings.preset;
-}
+onMounted(async () => {
+  try {
+    const settings = await getSettings(session.username);
+    apiKey.value = settings.apiKey;
+    preset.value = settings.preset;
+    model.value = settings.model;
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : 'Unable to load settings.'; }
+});
 
 async function submit() {
-  await saveSettings({
-    namespace: session.namespace,
-    apiKey: apiKey.value.trim(),
-    preset: preset.value.trim() || 'openrouter/auto',
-  });
-  saved.value = true;
-  window.setTimeout(() => (saved.value = false), 1800);
+  if (!model.value.trim()) return;
+  status.value = '';
+  error.value = '';
+  try {
+    await saveSettings(session.username, { apiKey: apiKey.value.trim(), preset: preset.value.trim(), model: model.value.trim() });
+    status.value = 'Saved';
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : 'Unable to save settings.'; }
 }
-
-async function newChat() {
-  const chat = await createChat(session.namespace);
-  await router.push({ name: 'chat', params: { chatId: chat.id } });
-}
-
-async function rename(id: string, title: string) {
-  await renameChat(id, title);
-  await load();
-}
-
-async function removeChat(id: string) {
-  await deleteChat(id);
-  await load();
-}
-
-onMounted(load);
 </script>
 
 <template>
-  <div class="app-shell">
-    <AppSidebar
-      :chats="chats"
-      :collapsed="collapsed"
-      @toggle="setCollapsed(!collapsed)"
-      @new-chat="newChat"
-      @select-chat="(id) => router.push({ name: 'chat', params: { chatId: id } })"
-      @rename-chat="rename"
-      @delete-chat="removeChat"
-    />
-    <main class="settings-page">
-      <form class="settings-panel" @submit.prevent="submit">
-        <h1>Settings</h1>
-        <label for="api-key">OpenRouter API key</label>
-        <input id="api-key" v-model="apiKey" type="password" autocomplete="off" />
-        <label for="preset">OpenRouter preset</label>
-        <input id="preset" v-model="preset" type="text" autocomplete="off" placeholder="openrouter/auto" />
-        <div class="settings-actions">
-          <button type="submit">Save</button>
-          <span v-if="saved" role="status">Saved</span>
+  <div class='secure-page'>
+    <SecureHeader title='Settings' />
+    <main class='page-content'>
+      <form class='card settings-form' @submit.prevent='submit'>
+        <label for='api-key'>OpenRouter API key</label>
+        <input id='api-key' v-model='apiKey' type='password' autocomplete='off'>
+        <label for='preset'>Preset name</label>
+        <input id='preset' v-model='preset' type='text' autocomplete='off' placeholder='Optional'>
+        <label for='model'>Model name</label>
+        <input id='model' v-model='model' type='text' autocomplete='off' required>
+        <p v-if='error' class='error' role='alert'>{{ error }}</p>
+        <div class='form-actions'>
+          <button class='primary-button' type='submit' :disabled='!model.trim()'>Save</button>
+          <span role='status'>{{ status }}</span>
         </div>
       </form>
     </main>

@@ -1,166 +1,109 @@
-﻿import type { Chat, Message, UserMeta, UserSettings } from './types';
+import { decryptVault, encryptVault, namespaceFor } from './crypto';
+import type { Chat, ChatMessage, UserSettings, UserVault, VaultEnvelope } from './types';
 
-const DB_NAME = 'openrouter-local-ui';
+const DB_NAME = 'opro-ui';
 const DB_VERSION = 1;
-
+const STORE = 'vaults';
 let dbPromise: Promise<IDBDatabase> | undefined;
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+function emptyVault(): UserVault {
+  return { settings: { apiKey: '', preset: '', model: 'openrouter/auto' }, chats: [] };
+}
 
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      const chats = db.createObjectStore('chats', { keyPath: 'id' });
-      chats.createIndex('namespace', 'namespace');
-      chats.createIndex('namespaceUpdatedAt', ['namespace', 'updatedAt']);
-
-      const messages = db.createObjectStore('messages', { keyPath: 'id' });
-      messages.createIndex('chatId', 'chatId');
-      messages.createIndex('chatCreatedAt', ['chatId', 'createdAt']);
-
-      db.createObjectStore('settings', { keyPath: 'namespace' });
-      db.createObjectStore('meta', { keyPath: 'namespace' });
-    };
-
-    request.onerror = () => reject(request.error);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: 'namespace' });
+    request.onerror = () => reject(request.error ?? new Error('Unable to open local storage.'));
     request.onsuccess = () => resolve(request.result);
   });
   return dbPromise;
 }
 
-function store<T>(
-  name: string,
-  mode: IDBTransactionMode,
-  callback: (store: IDBObjectStore) => IDBRequest<T> | void,
-): Promise<T> {
-  return openDb().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(name, mode);
-        const objectStore = tx.objectStore(name);
-        let request: IDBRequest<T> | void;
-        tx.onerror = () => reject(tx.error);
-        tx.oncomplete = () => resolve(request ? request.result : (undefined as T));
-        request = callback(objectStore);
-      }),
-  );
-}
-
-function uid(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID()}`;
-}
-
-function getAllFromIndex<T>(storeName: string, indexName: string, query: IDBValidKey | IDBKeyRange): Promise<T[]> {
-  return store<T[]>(storeName, 'readonly', (s) => s.index(indexName).getAll(query));
-}
-
-export async function getChats(namespace: string): Promise<Chat[]> {
-  const chats = await getAllFromIndex<Chat>('chats', 'namespace', namespace);
-  return chats.sort((a, b) => b.updatedAt - a.updatedAt);
-}
-
-export async function getChat(id: string): Promise<Chat | undefined> {
-  return store<Chat | undefined>('chats', 'readonly', (s) => s.get(id));
-}
-
-export async function createChat(namespace: string, title = 'New chat'): Promise<Chat> {
-  const now = Date.now();
-  const chat: Chat = { id: uid('chat'), namespace, title, createdAt: now, updatedAt: now };
-  await store('chats', 'readwrite', (s) => s.put(chat));
-  return chat;
-}
-
-export async function renameChat(id: string, title: string): Promise<void> {
-  const chat = await getChat(id);
-  if (!chat) return;
-  chat.title = title.trim() || 'Untitled chat';
-  chat.updatedAt = Date.now();
-  await store('chats', 'readwrite', (s) => s.put(chat));
-}
-
-export async function touchChat(id: string): Promise<void> {
-  const chat = await getChat(id);
-  if (!chat) return;
-  chat.updatedAt = Date.now();
-  await store('chats', 'readwrite', (s) => s.put(chat));
-}
-
-export async function deleteChat(id: string): Promise<void> {
+async function getEnvelope(namespace: string): Promise<VaultEnvelope | undefined> {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(['chats', 'messages'], 'readwrite');
-    tx.objectStore('chats').delete(id);
-    const messageIndex = tx.objectStore('messages').index('chatId');
-    const request = messageIndex.openKeyCursor(IDBKeyRange.only(id));
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (cursor) {
-        tx.objectStore('messages').delete(cursor.primaryKey);
-        cursor.continue();
-      }
-    };
-    tx.onerror = () => reject(tx.error);
-    tx.oncomplete = () => resolve();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE).objectStore(STORE).get(namespace);
+    request.onsuccess = () => resolve(request.result as VaultEnvelope | undefined);
+    request.onerror = () => reject(request.error ?? new Error('Unable to read local storage.'));
   });
 }
 
-export async function getMessages(chatId: string): Promise<Message[]> {
-  const messages = await getAllFromIndex<Message>('messages', 'chatId', chatId);
-  return messages.sort((a, b) => a.createdAt - b.createdAt);
-}
-
-export async function addMessage(
-  chatId: string,
-  role: Message['role'],
-  content: string,
-  metadata: Pick<Message, 'model' | 'totalTokens'> = {},
-): Promise<Message> {
-  const message: Message = { id: uid('msg'), chatId, role, content, createdAt: Date.now(), ...metadata };
-  await store('messages', 'readwrite', (s) => s.put(message));
-  await touchChat(chatId);
-  return message;
-}
-
-export async function updateMessage(message: Message): Promise<void> {
-  await store('messages', 'readwrite', (s) => s.put(message));
-  await touchChat(message.chatId);
-}
-
-export async function deleteMessagesAfter(chatId: string, createdAt: number): Promise<void> {
-  const messages = await getMessages(chatId);
-  const toDelete = messages.filter((message) => message.createdAt > createdAt);
+async function putEnvelope(envelope: VaultEnvelope): Promise<void> {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction('messages', 'readwrite');
-    const messagesStore = tx.objectStore('messages');
-    for (const message of toDelete) messagesStore.delete(message.id);
-    tx.onerror = () => reject(tx.error);
-    tx.oncomplete = () => resolve();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE, 'readwrite');
+    transaction.objectStore(STORE).put(envelope);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('Unable to save local storage.'));
   });
-  await touchChat(chatId);
 }
 
-export async function getSettings(namespace: string): Promise<UserSettings> {
-  const settings = await store<UserSettings | undefined>('settings', 'readonly', (s) => s.get(namespace));
-  return {
-    namespace,
-    apiKey: settings?.apiKey ?? '',
-    preset: settings?.preset ?? 'openrouter/auto',
-  };
+export async function loadVault(username: string): Promise<UserVault> {
+  const envelope = await getEnvelope(await namespaceFor(username));
+  return envelope ? decryptVault(username, envelope) : emptyVault();
 }
 
-export async function saveSettings(settings: UserSettings): Promise<void> {
-  await store('settings', 'readwrite', (s) => s.put(settings));
+async function mutateVault<T>(username: string, mutation: (vault: UserVault) => T | Promise<T>): Promise<T> {
+  const operation = writeQueue.then(async () => {
+    const vault = await loadVault(username);
+    const result = await mutation(vault);
+    await putEnvelope(await encryptVault(username, vault));
+    return result;
+  });
+  writeQueue = operation.catch(() => undefined);
+  return operation;
 }
 
-export async function getMeta(namespace: string): Promise<UserMeta> {
-  const meta = await store<UserMeta | undefined>('meta', 'readonly', (s) => s.get(namespace));
-  return meta ?? { namespace };
+export async function getSettings(username: string): Promise<UserSettings> {
+  return (await loadVault(username)).settings;
 }
 
-export async function setLastSentAt(namespace: string, lastSentAt: number): Promise<void> {
-  await store('meta', 'readwrite', (s) => s.put({ namespace, lastSentAt }));
+export async function saveSettings(username: string, settings: UserSettings): Promise<void> {
+  await mutateVault(username, (vault) => { vault.settings = { ...settings }; });
 }
 
+export async function getChats(username: string): Promise<Chat[]> {
+  return (await loadVault(username)).chats.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function getChat(username: string, id: string): Promise<Chat | undefined> {
+  return (await loadVault(username)).chats.find((chat) => chat.id === id);
+}
+
+export async function createChat(username: string, firstMessage: ChatMessage): Promise<Chat> {
+  return mutateVault(username, (vault) => {
+    const chat: Chat = { id: crypto.randomUUID(), title: 'Untitled', createdAt: firstMessage.createdAt, updatedAt: firstMessage.createdAt, messages: [firstMessage] };
+    vault.chats.push(chat);
+    return structuredClone(chat);
+  });
+}
+
+export async function updateChat(username: string, chat: Chat): Promise<void> {
+  await mutateVault(username, (vault) => {
+    const index = vault.chats.findIndex((item) => item.id === chat.id);
+    if (index < 0) throw new Error('Chat not found.');
+    vault.chats[index] = structuredClone(chat);
+  });
+}
+
+export async function renameChat(username: string, id: string, title: string): Promise<void> {
+  await mutateVault(username, (vault) => {
+    const chat = vault.chats.find((item) => item.id === id);
+    if (!chat) return;
+    chat.title = title.trim() || 'Untitled';
+    chat.updatedAt = Date.now();
+  });
+}
+
+export async function deleteChat(username: string, id: string): Promise<void> {
+  await mutateVault(username, (vault) => { vault.chats = vault.chats.filter((chat) => chat.id !== id); });
+}
+
+export function resetDbForTests(): void {
+  dbPromise?.then((db) => db.close());
+  dbPromise = undefined;
+  writeQueue = Promise.resolve();
+}

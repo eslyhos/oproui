@@ -1,265 +1,134 @@
-﻿<script setup lang="ts">
+<script setup lang='ts'>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import AppSidebar from '../components/AppSidebar.vue';
-import {
-  addMessage,
-  createChat,
-  deleteChat,
-  deleteMessagesAfter,
-  getChat,
-  getChats,
-  getMessages,
-  getSettings,
-  renameChat,
-  setLastSentAt,
-  updateMessage,
-} from '../db';
+import SecureHeader from '../components/SecureHeader.vue';
+import { createChat, getChat, getSettings, updateChat } from '../db';
+import { formatChatExport, formatLocalTimestamp, safeExportFilename } from '../export';
 import { requestReply } from '../openrouter';
 import { useSessionStore } from '../stores/session';
-import type { Chat, Message } from '../types';
+import type { Chat, ChatMessage, UserSettings } from '../types';
 
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
-
-const chats = ref<Chat[]>([]);
-const currentChat = ref<Chat | null>(null);
-const messages = ref<Message[]>([]);
+const chat = ref<Chat | null>(null);
 const prompt = ref('');
 const busy = ref(false);
 const error = ref('');
 const editingId = ref('');
 const editDraft = ref('');
-const collapsed = ref(localStorage.getItem('openrouter-ui-sidebar-collapsed') === 'true');
 const messageList = ref<HTMLElement | null>(null);
+const chatTitle = computed(() => chat.value?.title || 'New chat');
+function isUser(item: ChatMessage): boolean { return item.role === 'user'; }
 
-const activeChatId = computed(() => typeof route.params.chatId === 'string' ? route.params.chatId : '');
-const totalTokens = computed(() => messages.value.reduce((sum, message) => sum + (message.totalTokens ?? 0), 0));
-
-function setCollapsed(value: boolean) {
-  collapsed.value = value;
-  localStorage.setItem('openrouter-ui-sidebar-collapsed', String(value));
+function message(role: ChatMessage['role'], content: string, model: string): ChatMessage {
+  return { id: crypto.randomUUID(), role, content, model, createdAt: Date.now() };
 }
-
-async function loadChats() {
-  chats.value = await getChats(session.namespace);
-}
-
-async function ensureChat() {
-  await loadChats();
-  const routeChatId = activeChatId.value;
-  if (routeChatId) {
-    const chat = await getChat(routeChatId);
-    if (chat?.namespace === session.namespace) {
-      currentChat.value = chat;
-      messages.value = await getMessages(chat.id);
-      return;
-    }
-  }
-
-  const chat = chats.value[0] ?? (await createChat(session.namespace));
-  await router.replace({ name: 'chat', params: { chatId: chat.id } });
-}
-
-async function reloadCurrent() {
-  if (!currentChat.value) return;
-  currentChat.value = (await getChat(currentChat.value.id)) ?? currentChat.value;
-  messages.value = await getMessages(currentChat.value.id);
-  await loadChats();
+async function scrollBottom() {
   await nextTick();
   messageList.value?.scrollTo({ top: messageList.value.scrollHeight });
 }
-
-async function newChat() {
-  const chat = await createChat(session.namespace);
-  await loadChats();
-  await router.push({ name: 'chat', params: { chatId: chat.id } });
+async function load() {
+  error.value = '';
+  const id = typeof route.params.chatId === 'string' ? route.params.chatId : '';
+  if (!id) { chat.value = null; return; }
+  try {
+    chat.value = (await getChat(session.username, id)) ?? null;
+    if (!chat.value) error.value = 'Chat not found.';
+    await scrollBottom();
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : 'Unable to load chat.'; }
 }
-
-async function selectChat(id: string) {
-  await router.push({ name: 'chat', params: { chatId: id } });
+function validate(settings: UserSettings): string {
+  if (!settings.apiKey) return 'Add your OpenRouter API key in Settings before sending.';
+  if (!settings.model) return 'Add an OpenRouter model name in Settings before sending.';
+  return '';
 }
-
-async function removeChat(id: string) {
-  await deleteChat(id);
-  await loadChats();
-  if (id === currentChat.value?.id) {
-    const next = chats.value[0] ?? (await createChat(session.namespace));
-    await router.replace({ name: 'chat', params: { chatId: next.id } });
-  }
-}
-
-async function rename(id: string, title: string) {
-  await renameChat(id, title);
-  await loadChats();
-  if (id === currentChat.value?.id) currentChat.value = (await getChat(id)) ?? currentChat.value;
-}
-
-async function sendWithHistory(history: Message[]) {
-  if (!currentChat.value) return;
-  const settings = await getSettings(session.namespace);
-  if (!settings.apiKey) {
-    error.value = 'Add your OpenRouter API key in Settings before sending.';
-    return;
-  }
-
+async function complete(settings: UserSettings) {
+  if (!chat.value) return;
   busy.value = true;
   error.value = '';
-  let placeholder: Message | undefined;
+  await scrollBottom();
   try {
-    placeholder = await addMessage(currentChat.value.id, 'assistant', 'Waiting for response ...');
-    await reloadCurrent();
-
-    const reply = await requestReply(settings.apiKey, settings.preset, history);
-    await updateMessage({
-      ...placeholder,
-      content: reply.content,
-      model: reply.model,
-      totalTokens: reply.totalTokens,
-    });
-    await reloadCurrent();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'The OpenRouter request failed.';
-    error.value = message;
-    if (placeholder) {
-      await updateMessage({ ...placeholder, content: `Error: ${message}` });
-      await reloadCurrent();
-    }
-  } finally {
-    busy.value = false;
-  }
+    const reply = await requestReply(settings, chat.value.messages);
+    chat.value.messages.push(message('assistant', reply.content, reply.model));
+    chat.value.updatedAt = Date.now();
+    await updateChat(session.username, chat.value);
+    await scrollBottom();
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : 'OpenRouter request failed.'; }
+  finally { busy.value = false; }
 }
-
 async function sendPrompt() {
   const content = prompt.value.trim();
-  if (!content || !currentChat.value || busy.value) return;
-  busy.value = true;
-  prompt.value = '';
-  try {
-    const userMessage = await addMessage(currentChat.value.id, 'user', content);
-    await setLastSentAt(session.namespace, userMessage.createdAt);
-    await reloadCurrent();
-    await sendWithHistory(messages.value);
-  } finally {
-    busy.value = false;
-  }
-}
-
-function startEdit(message: Message) {
-  editingId.value = message.id;
-  editDraft.value = message.content;
-}
-
-async function saveEdit(message: Message) {
-  const content = editDraft.value.trim();
   if (!content || busy.value) return;
-  const updated: Message = { ...message, content };
-  await updateMessage(updated);
-  await deleteMessagesAfter(updated.chatId, updated.createdAt);
+  const settings = await getSettings(session.username);
+  const problem = validate(settings);
+  if (problem) { error.value = problem; return; }
+  const userMessage = message('user', content, settings.model);
+  prompt.value = '';
+  if (!chat.value) {
+    chat.value = await createChat(session.username, userMessage);
+    await router.replace({ name: 'chat', params: { chatId: chat.value.id } });
+  } else {
+    chat.value.messages.push(userMessage);
+    chat.value.updatedAt = Date.now();
+    await updateChat(session.username, chat.value);
+  }
+  await complete(settings);
+}
+function startEdit(item: ChatMessage) { editingId.value = item.id; editDraft.value = item.content; }
+function cancelEdit() { editingId.value = ''; editDraft.value = ''; }
+async function saveEdit(item: ChatMessage) {
+  const content = editDraft.value.trim();
+  if (!chat.value || !content || busy.value) return;
+  const settings = await getSettings(session.username);
+  const problem = validate(settings);
+  if (problem) { error.value = problem; return; }
+  const index = chat.value.messages.findIndex((entry) => entry.id === item.id);
+  if (index < 0) return;
+  chat.value.messages = chat.value.messages.slice(0, index + 1);
+  chat.value.messages[index] = { ...item, content, model: settings.model };
+  chat.value.updatedAt = Date.now();
   editingId.value = '';
-  await reloadCurrent();
-  await setLastSentAt(session.namespace, Date.now());
-  await sendWithHistory(messages.value);
+  await updateChat(session.username, chat.value);
+  await complete(settings);
 }
-
-function cancelEdit() {
-  editingId.value = '';
-  editDraft.value = '';
-}
-
-function formatStamp(timestamp: number): string {
-  const date = new Date(timestamp);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 function exportChat() {
-  if (!currentChat.value) return;
-  const text = messages.value
-    .map((message) => [
-      `--------------------`,
-      ...(message.model ? [`[${message.model}]`] : []),
-      `[${formatStamp(message.createdAt)}]`,
-      `[${message.role === 'user' ? session.username : 'Reply'}]`,
-      `${message.content}`,
-    ].join('\n'))
-    .join('\n\n');
-  const exportText = totalTokens.value > 0 ? `${text}\n\n[total_tokens: ${totalTokens.value}]` : text;
-  const blob = new Blob([exportText], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
+  if (!chat.value) return;
+  const url = URL.createObjectURL(new Blob([formatChatExport(chat.value)], { type: 'text/plain;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${currentChat.value.title.replace(/[^\w.-]+/g, '_') || 'chat'}.txt`;
+  link.download = safeExportFilename(chat.value.title);
   link.click();
   URL.revokeObjectURL(url);
 }
 
-watch(() => route.params.chatId, ensureChat);
-onMounted(ensureChat);
+watch(() => route.params.chatId, load);
+onMounted(load);
 </script>
 
 <template>
-  <div class="app-shell">
-    <AppSidebar
-      :chats="chats"
-      :active-chat-id="currentChat?.id"
-      :collapsed="collapsed"
-      @toggle="setCollapsed(!collapsed)"
-      @new-chat="newChat"
-      @select-chat="selectChat"
-      @rename-chat="rename"
-      @delete-chat="removeChat"
-    />
-
-    <main class="chat-page">
-      <header class="chat-header">
-        <h1>{{ currentChat?.title || 'Chat' }}</h1>
-        <div class="chat-header-actions">
-          <div v-if="totalTokens > 0" class="token-total" title="Total tokens">total_tokens: {{ totalTokens }}</div>
-          <button type="button" class="icon-text-button" title="Export current chat" aria-label="Export current chat" @click="exportChat">
-            <span aria-hidden="true">Download</span>
-            <span>Export</span>
-          </button>
+  <div class='secure-page chat-page'>
+    <SecureHeader :title='chatTitle' exportable @export='exportChat' />
+    <main ref='messageList' class='message-list' aria-label='Chat messages'>
+      <p v-if='!chat?.messages.length && !busy' class='empty-state'>Start a new chat.</p>
+      <article v-for='item in chat?.messages || []' :key='item.id' class='message' :class='item.role'>
+        <div class='message-meta'>{{ item.role }} - {{ item.model }} - {{ formatLocalTimestamp(item.createdAt) }}</div>
+        <textarea v-if='editingId === item.id' v-model='editDraft' class='edit-textarea' rows='5' aria-label='Edit prompt'></textarea>
+        <p v-else class='message-content'>{{ item.content }}</p>
+        <div v-if='isUser(item)' class='message-actions'>
+          <button v-if='editingId !== item.id' type='button' @click='startEdit(item)'>Edit</button>
+          <template v-else>
+            <button type='button' :disabled='busy || !editDraft.trim()' @click='saveEdit(item)'>Save and regenerate</button>
+            <button type='button' @click='cancelEdit'>Cancel</button>
+          </template>
         </div>
-      </header>
-
-      <section ref="messageList" class="message-list" aria-label="Current chat messages">
-        <div v-if="messages.length === 0" class="empty-state">No messages yet.</div>
-        <article v-for="message in messages" :key="message.id" class="message" :class="message.role">
-          <div class="message-meta">
-            <span v-if="message.model">{{ message.model }} - </span>{{ message.role === 'user' ? session.username : 'Reply' }} - {{ formatStamp(message.createdAt) }}
-          </div>
-          <textarea
-            v-if="editingId === message.id"
-            v-model="editDraft"
-            class="edit-area"
-            aria-label="Edit message"
-            rows="5"
-          />
-          <p v-else class="message-content">{{ message.content }}</p>
-          <div v-if="message.role === 'user'" class="message-actions">
-            <button v-if="editingId !== message.id" type="button" class="text-button" @click="startEdit(message)">Edit</button>
-            <template v-else>
-              <button type="button" class="text-button" :disabled="busy" @click="saveEdit(message)">Regenerate</button>
-              <button type="button" class="text-button" @click="cancelEdit">Cancel</button>
-            </template>
-          </div>
-        </article>
-      </section>
-
-      <form class="composer" @submit.prevent="sendPrompt">
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
-        <textarea
-          v-model="prompt"
-          rows="4"
-          placeholder="Type a text prompt"
-          aria-label="Text prompt"
-          :disabled="busy"
-          @keydown.enter.stop
-        />
-        <button type="submit" :disabled="busy || !prompt.trim()">{{ busy ? 'Sending' : 'Send' }}</button>
-      </form>
+      </article>
+      <p v-if='busy' class='waiting' role='status'>Waiting for response</p>
     </main>
+    <form class='composer' @submit.prevent='sendPrompt'>
+      <p v-if='error' class='error composer-error' role='alert'>{{ error }}</p>
+      <textarea v-model='prompt' rows='3' placeholder='Message OpenRouter' aria-label='Message' :disabled='busy'></textarea>
+      <button class='primary-button send-button' type='submit' :disabled='busy || !prompt.trim()'>Send</button>
+    </form>
   </div>
 </template>
