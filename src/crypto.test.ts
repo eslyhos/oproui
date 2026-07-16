@@ -1,31 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { decryptVault, encryptVault, namespaceFor } from './crypto';
-import type { UserVault } from './types';
+import { decryptText, encryptText, namespaceFor } from './crypto';
 
-const vault: UserVault = {
-  settings: { apiKey: 'secret-key', preset: 'my-preset', model: 'openai/test' },
-  chats: [{ id: '1', title: 'Private title', createdAt: 1, updatedAt: 2, messages: [] }],
-};
-
-describe('encrypted vault', () => {
+describe('encrypted values', () => {
   it('round trips without exposing plaintext', async () => {
-    const envelope = await encryptVault('Alice', vault);
-    expect(JSON.stringify(envelope)).not.toContain('secret-key');
-    expect(JSON.stringify(envelope)).not.toContain('Private title');
-    expect(await decryptVault('Alice', envelope)).toEqual(vault);
+    const encrypted = await encryptText('Alice', 'message:1:1:content', 'private text');
+    expect(JSON.stringify(encrypted)).not.toContain('private text');
+    expect(await decryptText('Alice', 'message:1:1:content', encrypted)).toBe('private text');
   });
 
   it('uses random nonces and case-sensitive namespaces', async () => {
-    const first = await encryptVault('Alice', vault);
-    const second = await encryptVault('Alice', vault);
+    const first = await encryptText('Alice', 'settings:apiKey', 'same');
+    const second = await encryptText('Alice', 'settings:apiKey', 'same');
     expect(first.nonce).not.toBe(second.nonce);
+    expect(first.content).not.toBe(second.content);
     expect(await namespaceFor('Alice')).not.toBe(await namespaceFor('alice'));
   });
 
-  it('rejects tampering and the wrong username', async () => {
-    const envelope = await encryptVault('Alice', vault);
-    await expect(decryptVault('Bob', envelope)).rejects.toThrow('unavailable or corrupt');
-    envelope.ciphertext = `${envelope.ciphertext.slice(0, -2)}AA`;
-    await expect(decryptVault('Alice', envelope)).rejects.toThrow('unavailable or corrupt');
+  it('rejects tampering, the wrong username, and a different context', async () => {
+    const encrypted = await encryptText('Alice', 'settings:apiKey', 'secret');
+    await expect(decryptText('Bob', 'settings:apiKey', encrypted)).rejects.toThrow('unavailable or corrupt');
+    await expect(decryptText('Alice', 'settings:preset', encrypted)).rejects.toThrow('unavailable or corrupt');
+    const tampered = { ...encrypted, content: `${encrypted.content.slice(0, -2)}AA` };
+    await expect(decryptText('Alice', 'settings:apiKey', tampered)).rejects.toThrow('unavailable or corrupt');
   });
 });

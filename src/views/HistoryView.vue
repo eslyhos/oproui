@@ -4,11 +4,11 @@ import { useRouter } from 'vue-router';
 import SecureHeader from '../components/SecureHeader.vue';
 import { deleteChat, getChats, renameChat } from '../db';
 import { useSessionStore } from '../stores/session';
-import type { Chat } from '../types';
+import type { ChatSummary } from '../types';
 
 const router = useRouter();
 const session = useSessionStore();
-const chats = ref<Chat[]>([]);
+const chats = ref<ChatSummary[]>([]);
 const editingId = ref('');
 const draft = ref('');
 const error = ref('');
@@ -18,13 +18,13 @@ async function load() {
   catch (reason) { error.value = reason instanceof Error ? reason.message : 'Unable to load chat history.'; }
 }
 function openChat(id: string) { void router.push({ name: 'chat', params: { chatId: id } }); }
-function startRename(chat: Chat) { editingId.value = chat.id; draft.value = chat.title; }
+function startRename(chat: ChatSummary) { editingId.value = chat.id; draft.value = chat.title; }
 async function saveRename(id: string) {
   await renameChat(session.username, id, draft.value);
   editingId.value = '';
   await load();
 }
-async function remove(chat: Chat) {
+async function remove(chat: ChatSummary) {
   if (!window.confirm(`Delete ${chat.title}?`)) return;
   await deleteChat(session.username, chat.id);
   await load();

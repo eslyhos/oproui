@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import SecureHeader from '../components/SecureHeader.vue';
-import { createChat, getChat, getSettings, updateChat } from '../db';
+import { appendMessage, createChat, editMessageAndTruncate, getChat, getSettings } from '../db';
 import { formatChatExport, formatLocalTimestamp, safeExportFilename } from '../export';
 import { requestReply } from '../openrouter';
 import { useSessionStore } from '../stores/session';
@@ -50,9 +50,10 @@ async function complete(settings: UserSettings) {
   await scrollBottom();
   try {
     const reply = await requestReply(settings, chat.value.messages);
-    chat.value.messages.push(message('assistant', reply.content, reply.model));
-    chat.value.updatedAt = Date.now();
-    await updateChat(session.username, chat.value);
+    const assistantMessage = message('assistant', reply.content, reply.model);
+    await appendMessage(session.username, chat.value.id, assistantMessage);
+    chat.value.messages.push(assistantMessage);
+    chat.value.updatedAt = assistantMessage.createdAt;
     await scrollBottom();
   } catch (reason) { error.value = reason instanceof Error ? reason.message : 'OpenRouter request failed.'; }
   finally { busy.value = false; }
@@ -69,9 +70,9 @@ async function sendPrompt() {
     chat.value = await createChat(session.username, userMessage);
     await router.replace({ name: 'chat', params: { chatId: chat.value.id } });
   } else {
+    await appendMessage(session.username, chat.value.id, userMessage);
     chat.value.messages.push(userMessage);
-    chat.value.updatedAt = Date.now();
-    await updateChat(session.username, chat.value);
+    chat.value.updatedAt = userMessage.createdAt;
   }
   await complete(settings);
 }
@@ -85,11 +86,13 @@ async function saveEdit(item: ChatMessage) {
   if (problem) { error.value = problem; return; }
   const index = chat.value.messages.findIndex((entry) => entry.id === item.id);
   if (index < 0) return;
+  const editedMessage = { ...item, content, model: settings.model };
+  const updatedAt = Date.now();
+  await editMessageAndTruncate(session.username, chat.value.id, editedMessage, updatedAt);
   chat.value.messages = chat.value.messages.slice(0, index + 1);
-  chat.value.messages[index] = { ...item, content, model: settings.model };
-  chat.value.updatedAt = Date.now();
+  chat.value.messages[index] = editedMessage;
+  chat.value.updatedAt = updatedAt;
   editingId.value = '';
-  await updateChat(session.username, chat.value);
   await complete(settings);
 }
 function exportChat() {

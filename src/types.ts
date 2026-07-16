@@ -16,20 +16,20 @@ export interface Chat {
   messages: ChatMessage[];
 }
 
+export interface ChatSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface UserSettings {
   apiKey: string;
   preset: string;
   model: string;
 }
 
-export interface UserVault {
-  settings: UserSettings;
-  chats: Chat[];
-}
-
-export interface VaultEnvelope {
-  namespace: string;
-  version: 1;
+export interface EncryptedValue {
   nonce: string;
-  ciphertext: string;
+  content: string;
 }
