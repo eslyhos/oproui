@@ -50,8 +50,9 @@ h1 { margin: 0; font-size: 13px; }
   box-shadow: 0 8px 28px rgba(30, 40, 34, .07);
 }
 .login-card, .settings-form { display: grid; gap: 12px; }
-.login-card h1, .menu-card h1 { text-align: center; margin-bottom: 8px; }
+.login-card h1 { text-align: center; margin-bottom: 8px; }
 .menu-card { display: grid; gap: 18px; }
+.menu-content { display: grid; place-items: center; }
 .main-menu { display: grid; gap: 10px; }
 .main-menu button { min-height: 52px; }
 
