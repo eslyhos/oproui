@@ -18,7 +18,7 @@ function submit() {
     <form class='card login-card' @submit.prevent='submit'>
       <h1>OproUI</h1>
       <label for='username'>Username</label>
-      <input id='username' v-model='username' type='text' autocomplete='username' autofocus required>
+      <input id='username' v-model='username' type='password' autocomplete='current-password' autofocus required>
       <button class='primary-button' type='submit' :disabled='!username.trim()'>Login</button>
     </form>
   </main>
