@@ -32,13 +32,17 @@ interface MessageRecord {
   position: number;
   role: ChatMessage['role'];
   content: EncryptedValue;
+  reasoning?: EncryptedValue;
   createdAt: number;
   model: string;
+  provider?: string;
+  totalTokens?: number;
 }
 
 function settingsContext(field: 'apiKey' | 'preset'): string { return `settings:${field}`; }
 function titleContext(chatId: string): string { return `chat:${chatId}:title`; }
 function messageContext(chatId: string, messageId: string): string { return `message:${chatId}:${messageId}:content`; }
+function reasoningContext(chatId: string, messageId: string): string { return `message:${chatId}:${messageId}:reasoning`; }
 
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
@@ -107,6 +111,9 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 async function encryptedMessage(namespace: string, username: string, chatId: string, message: ChatMessage, position: number): Promise<MessageRecord> {
+  const reasoning = message.reasoning
+    ? await encryptText(username, reasoningContext(chatId, message.id), message.reasoning)
+    : undefined;
   return {
     namespace,
     chatId,
@@ -114,8 +121,11 @@ async function encryptedMessage(namespace: string, username: string, chatId: str
     position,
     role: message.role,
     content: await encryptText(username, messageContext(chatId, message.id), message.content),
+    reasoning,
     createdAt: message.createdAt,
     model: message.model,
+    provider: message.provider,
+    totalTokens: message.totalTokens,
   };
 }
 
@@ -163,13 +173,24 @@ export async function getChat(username: string, id: string): Promise<Chat | unde
   const storedMessages = await recordsForChat(namespace, id);
   const [title, messages] = await Promise.all([
     decryptText(username, titleContext(id), record.title),
-    Promise.all(storedMessages.map(async (message) => ({
-      id: message.id,
-      role: message.role,
-      content: await decryptText(username, messageContext(id, message.id), message.content),
-      createdAt: message.createdAt,
-      model: message.model,
-    }))),
+    Promise.all(storedMessages.map(async (message) => {
+      const [content, reasoning] = await Promise.all([
+        decryptText(username, messageContext(id, message.id), message.content),
+        message.reasoning
+          ? decryptText(username, reasoningContext(id, message.id), message.reasoning)
+          : undefined,
+      ]);
+      return {
+        id: message.id,
+        role: message.role,
+        content,
+        reasoning,
+        createdAt: message.createdAt,
+        model: message.model,
+        provider: message.provider,
+        totalTokens: message.totalTokens,
+      };
+    })),
   ]);
   return { id, title, createdAt: record.createdAt, updatedAt: record.updatedAt, messages };
 }

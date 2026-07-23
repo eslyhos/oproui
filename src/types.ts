@@ -6,6 +6,9 @@ export interface ChatMessage {
   content: string;
   createdAt: number;
   model: string;
+  provider?: string;
+  reasoning?: string;
+  totalTokens?: number;
 }
 
 export interface Chat {

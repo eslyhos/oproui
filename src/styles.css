@@ -99,7 +99,13 @@ h1 { margin: 0; font-size: 13px; }
 .danger-button { color: #9a2424; }
 .empty-state { margin: 20vh 0 0; color: #70766f; text-align: center; }
 
-.chat-page { grid-template-rows: auto minmax(0, 1fr) auto; }
+.chat-page { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.token-summary {
+  padding: 6px 12px;
+  border-bottom: 1px solid #d7dad5;
+  color: #697069;
+  background: #f5f6f2;
+}
 .message-list {
   min-height: 0;
   display: flex;
@@ -120,6 +126,10 @@ h1 { margin: 0; font-size: 13px; }
 .message.assistant { align-self: flex-start; }
 .message-meta { margin-bottom: 8px; color: #697069; }
 .message-content { margin: 0; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.message-label { margin-bottom: 4px; color: #59615a; font-weight: 600; }
+.reasoning-section { margin-bottom: 12px; }
+.reasoning-content { color: #59615a; font-style: italic; }
+.response-label { margin-top: 2px; }
 .message-actions { display: flex; gap: 7px; margin-top: 10px; }
 .message-actions button { min-height: 34px; padding: 5px 10px; }
 .edit-textarea { min-height: 110px; }

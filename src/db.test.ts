@@ -48,17 +48,29 @@ describe('per-record persistence', () => {
 
   it('stores titles and each message in independent encrypted values', async () => {
     const chat = await createChat('User', message('first', 'private first', 1));
-    await appendMessage('User', chat.id, { ...message('second', 'private second', 2), role: 'assistant' });
+    await appendMessage('User', chat.id, {
+      ...message('second', 'private second', 2),
+      role: 'assistant',
+      provider: 'AtlasCloud',
+      reasoning: 'private reasoning',
+      totalTokens: 455,
+    });
     expect(await getChat('User', chat.id)).toMatchObject({
       title: 'Untitled',
-      messages: [{ content: 'private first' }, { content: 'private second' }],
+      messages: [
+        { content: 'private first' },
+        { content: 'private second', provider: 'AtlasCloud', reasoning: 'private reasoning', totalTokens: 455 },
+      ],
     });
     expect(await getChats('User')).toEqual([{ id: chat.id, title: 'Untitled', createdAt: 1, updatedAt: 2 }]);
     const raw = JSON.stringify([...(await rawRecords('chats')), ...(await rawRecords('messages'))]);
     expect(raw).not.toContain('Untitled');
     expect(raw).not.toContain('private first');
     expect(raw).not.toContain('private second');
+    expect(raw).not.toContain('private reasoning');
     expect(raw).toContain('model/test');
+    expect(raw).toContain('AtlasCloud');
+    expect(raw).toContain('455');
   });
 
   it('does not rewrite previous messages when appending', async () => {

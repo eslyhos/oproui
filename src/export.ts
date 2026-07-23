@@ -8,9 +8,13 @@ export function formatLocalTimestamp(timestamp: number): string {
 }
 
 export function formatChatExport(chat: Chat): string {
-  return chat.messages.map((message) =>
-    `[${formatLocalTimestamp(message.createdAt)}] [${message.role}] [${message.model}]\n${message.content}\n--------------------\n\n`,
-  ).join('');
+  return chat.messages.map((message) => {
+    if (message.role === 'user') {
+      return `[${formatLocalTimestamp(message.createdAt)}] [${message.role}] [${message.model}]\n${message.content}\n--------------------\n\n`;
+    }
+    const reasoning = message.reasoning ? `Reasoning:\n${message.reasoning}\n\n` : '';
+    return `[${formatLocalTimestamp(message.createdAt)}] [${message.role}] [${message.provider || 'Provider unknown'}] [${message.model}]\n${reasoning}Response:\n${message.content}\n--------------------\n\n`;
+  }).join('');
 }
 
 export function safeExportFilename(title: string): string {

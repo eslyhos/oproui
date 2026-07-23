@@ -1,6 +1,7 @@
 <script setup lang='ts'>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { latestTotalTokens } from '../chat-metadata';
 import SecureHeader from '../components/SecureHeader.vue';
 import { appendMessage, createChat, editMessageAndTruncate, getChat, getSettings } from '../db';
 import { formatChatExport, formatLocalTimestamp, safeExportFilename } from '../export';
@@ -19,10 +20,19 @@ const editingId = ref('');
 const editDraft = ref('');
 const messageList = ref<HTMLElement | null>(null);
 const chatTitle = computed(() => chat.value?.title || 'New chat');
+const totalTokens = computed(() => latestTotalTokens(chat.value?.messages ?? []));
+const totalTokensText = computed(() => totalTokens.value === undefined
+  ? 'Total tokens: unavailable'
+  : `Total tokens: ${totalTokens.value.toLocaleString()}`);
 function isUser(item: ChatMessage): boolean { return item.role === 'user'; }
 
-function message(role: ChatMessage['role'], content: string, model: string): ChatMessage {
-  return { id: crypto.randomUUID(), role, content, model, createdAt: Date.now() };
+function message(
+  role: ChatMessage['role'],
+  content: string,
+  model: string,
+  metadata: Pick<ChatMessage, 'provider' | 'reasoning' | 'totalTokens'> = {},
+): ChatMessage {
+  return { id: crypto.randomUUID(), role, content, model, createdAt: Date.now(), ...metadata };
 }
 async function scrollBottom() {
   await nextTick();
@@ -50,7 +60,11 @@ async function complete(settings: UserSettings) {
   await scrollBottom();
   try {
     const reply = await requestReply(settings, chat.value.messages);
-    const assistantMessage = message('assistant', reply.content, reply.model);
+    const assistantMessage = message('assistant', reply.content, reply.model, {
+      provider: reply.provider,
+      reasoning: reply.reasoning,
+      totalTokens: reply.totalTokens,
+    });
     await appendMessage(session.username, chat.value.id, assistantMessage);
     chat.value.messages.push(assistantMessage);
     chat.value.updatedAt = assistantMessage.createdAt;
@@ -112,12 +126,23 @@ onMounted(load);
 <template>
   <div class='secure-page chat-page'>
     <SecureHeader :title='chatTitle' exportable @export='exportChat' />
+    <div class='token-summary' aria-live='polite'>{{ totalTokensText }}</div>
     <main ref='messageList' class='message-list' aria-label='Chat messages'>
       <p v-if='!chat?.messages.length && !busy' class='empty-state'>Start a new chat.</p>
       <article v-for='item in chat?.messages || []' :key='item.id' class='message' :class='item.role'>
-        <div class='message-meta'>{{ item.role }} - {{ item.model }} - {{ formatLocalTimestamp(item.createdAt) }}</div>
+        <div class='message-meta'>
+          <template v-if='!isUser(item)'>{{ item.role }} - {{ item.provider || 'Provider unknown' }} - {{ item.model }} - {{ formatLocalTimestamp(item.createdAt) }}</template>
+          <template v-else>{{ item.role }} - {{ item.model }} - {{ formatLocalTimestamp(item.createdAt) }}</template>
+        </div>
         <textarea v-if='editingId === item.id' v-model='editDraft' class='edit-textarea' rows='5' aria-label='Edit prompt'></textarea>
-        <p v-else class='message-content'>{{ item.content }}</p>
+        <template v-else>
+          <div v-if='!isUser(item) && item.reasoning' class='reasoning-section'>
+            <div class='message-label'>Reasoning:</div>
+            <p class='message-content reasoning-content'>{{ item.reasoning }}</p>
+          </div>
+          <div v-if='!isUser(item)' class='message-label response-label'>Response:</div>
+          <p class='message-content'>{{ item.content }}</p>
+        </template>
         <div v-if='isUser(item)' class='message-actions'>
           <button v-if='editingId !== item.id' type='button' @click='startEdit(item)'>Edit</button>
           <template v-else>
