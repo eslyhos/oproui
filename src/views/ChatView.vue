@@ -1,7 +1,7 @@
 <script setup lang='ts'>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { latestTotalTokens } from '../chat-metadata';
+import { accumulatedTotalTokens } from '../chat-metadata';
 import SecureHeader from '../components/SecureHeader.vue';
 import { appendMessage, createChat, editMessageAndTruncate, getChat, getSettings } from '../db';
 import { formatChatExport, formatLocalTimestamp, safeExportFilename } from '../export';
@@ -20,7 +20,7 @@ const editingId = ref('');
 const editDraft = ref('');
 const messageList = ref<HTMLElement | null>(null);
 const chatTitle = computed(() => chat.value?.title || 'New chat');
-const totalTokens = computed(() => latestTotalTokens(chat.value?.messages ?? []));
+const totalTokens = computed(() => accumulatedTotalTokens(chat.value?.messages ?? []));
 const totalTokensText = computed(() => totalTokens.value === undefined
   ? 'Total tokens: unavailable'
   : `Total tokens: ${totalTokens.value.toLocaleString()}`);
