@@ -149,7 +149,7 @@ h1 { margin: 0; font-size: 13px; }
 .send-button { width: 66px; min-width: 66px; padding-inline: 8px; white-space: nowrap; }
 
 @media (max-width: 480px) {
-  input, textarea { font-size: 16px; }
+  input, textarea { font-size: 13px; }
   .card { padding: 16px; }
   .secure-header { padding-inline: 8px; }
   .history-item { grid-template-columns: 1fr; }
