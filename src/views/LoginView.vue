@@ -19,7 +19,7 @@ function submit() {
       <h1>OproUI</h1>
       <label for='username'>Username</label>
       <input id='username' v-model='username' type='password' autocomplete='current-password' autofocus required>
-      <button class='primary-button' type='submit' :disabled='!username.trim()'>Login</button>
+      <button class='primary-button' type='submit' :disabled='!username.trim()'>Start</button>
     </form>
   </main>
 </template>
