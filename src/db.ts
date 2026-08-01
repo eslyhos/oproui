@@ -39,6 +39,12 @@ interface MessageRecord {
   totalTokens?: number;
 }
 
+interface DatabaseBackup {
+  settings: SettingsRecord[];
+  chats: ChatRecord[];
+  messages: MessageRecord[];
+}
+
 function settingsContext(field: 'apiKey' | 'preset'): string { return `settings:${field}`; }
 function titleContext(chatId: string): string { return `chat:${chatId}:title`; }
 function messageContext(chatId: string, messageId: string): string { return `message:${chatId}:${messageId}:content`; }
@@ -97,10 +103,14 @@ async function runTransaction(storeNames: string[], action: (stores: Record<stri
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeNames, 'readwrite');
     const stores = Object.fromEntries(storeNames.map((name) => [name, transaction.objectStore(name)]));
-    action(stores);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error('Unable to save local storage.'));
     transaction.onabort = () => reject(transaction.error ?? new Error('Unable to save local storage.'));
+    try { action(stores); }
+    catch (reason) {
+      transaction.abort();
+      reject(reason instanceof Error ? reason : new Error('Unable to save local storage.'));
+    }
   });
 }
 
@@ -108,6 +118,36 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
   const result = writeQueue.then(operation);
   writeQueue = result.catch(() => undefined);
   return result;
+}
+
+async function readAllStores(): Promise<DatabaseBackup> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([SETTINGS_STORE, CHATS_STORE, MESSAGES_STORE], 'readonly');
+    const settingsRequest = transaction.objectStore(SETTINGS_STORE).getAll();
+    const chatsRequest = transaction.objectStore(CHATS_STORE).getAll();
+    const messagesRequest = transaction.objectStore(MESSAGES_STORE).getAll();
+    transaction.oncomplete = () => resolve({
+      settings: settingsRequest.result as SettingsRecord[],
+      chats: chatsRequest.result as ChatRecord[],
+      messages: messagesRequest.result as MessageRecord[],
+    });
+    transaction.onerror = () => reject(transaction.error ?? new Error('Unable to read local storage.'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('Unable to read local storage.'));
+  });
+}
+
+export async function exportDatabaseBackup(): Promise<DatabaseBackup> {
+  return enqueue(readAllStores);
+}
+
+export async function replaceDatabaseFromBackup(backup: DatabaseBackup): Promise<void> {
+  await enqueue(() => runTransaction([SETTINGS_STORE, CHATS_STORE, MESSAGES_STORE], (stores) => {
+    for (const store of Object.values(stores)) store.clear();
+    for (const record of backup.settings) stores[SETTINGS_STORE].add(record);
+    for (const record of backup.chats) stores[CHATS_STORE].add(record);
+    for (const record of backup.messages) stores[MESSAGES_STORE].add(record);
+  }));
 }
 
 async function encryptedMessage(namespace: string, username: string, chatId: string, message: ChatMessage, position: number): Promise<MessageRecord> {
