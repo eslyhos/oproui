@@ -1,10 +1,12 @@
 <script setup lang='ts'>
 import { ref } from 'vue';
+import { useSessionStore } from '../stores/session';
 import { useRouter } from 'vue-router';
 import SecureHeader from '../components/SecureHeader.vue';
 import { exportDatabaseBackup, replaceDatabaseFromBackup } from '../db';
 
 const router = useRouter();
+const session = useSessionStore();
 const fileInput = ref<HTMLInputElement>();
 const busy = ref(false);
 const status = ref('');
@@ -62,6 +64,7 @@ async function importData(event: Event) {
     <main class='page-content menu-content'>
       <section class='card menu-card'>
         <nav class='main-menu' aria-label='Main menu'>
+          <p class='menu-username'>{{ session.username }}</p>
           <button type='button' @click='openChat'>New chat</button>
           <button type='button' @click='openHistory'>Chat history</button>
           <button type='button' @click='openSettings'>Settings</button>
