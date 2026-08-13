@@ -54,7 +54,7 @@ h1 { margin: 0; font-size: 13px; }
 .menu-card { display: grid; gap: 18px; }
 .menu-content { display: grid; place-items: center; }
 .main-menu { display: grid; gap: 10px; }
-.menu-username { margin: 0; text-align: center; }
+.menu-username { margin: 0 0 8px; text-align: center; }
 .main-menu button { min-height: 52px; }
 .menu-status { margin: 0; color: #59615a; text-align: center; }
 .visually-hidden {
