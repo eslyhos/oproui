@@ -34,7 +34,7 @@ export async function requestReply(settings: UserSettings, messages: ChatMessage
   try {
     response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'OproUI' },
+      headers: { Authorization: `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   } catch (error) {
