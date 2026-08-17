@@ -40,7 +40,6 @@ interface MessageRecord {
 }
 
 interface DatabaseBackup {
-  settings: SettingsRecord[];
   chats: ChatRecord[];
   messages: MessageRecord[];
 }
@@ -123,12 +122,10 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
 async function readAllStores(): Promise<DatabaseBackup> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([SETTINGS_STORE, CHATS_STORE, MESSAGES_STORE], 'readonly');
-    const settingsRequest = transaction.objectStore(SETTINGS_STORE).getAll();
+    const transaction = db.transaction([CHATS_STORE, MESSAGES_STORE], 'readonly');
     const chatsRequest = transaction.objectStore(CHATS_STORE).getAll();
     const messagesRequest = transaction.objectStore(MESSAGES_STORE).getAll();
     transaction.oncomplete = () => resolve({
-      settings: settingsRequest.result as SettingsRecord[],
       chats: chatsRequest.result as ChatRecord[],
       messages: messagesRequest.result as MessageRecord[],
     });
@@ -141,12 +138,20 @@ export async function exportDatabaseBackup(): Promise<DatabaseBackup> {
   return enqueue(readAllStores);
 }
 
-export async function replaceDatabaseFromBackup(backup: DatabaseBackup): Promise<void> {
-  await enqueue(() => runTransaction([SETTINGS_STORE, CHATS_STORE, MESSAGES_STORE], (stores) => {
-    for (const store of Object.values(stores)) store.clear();
-    for (const record of backup.settings) stores[SETTINGS_STORE].add(record);
-    for (const record of backup.chats) stores[CHATS_STORE].add(record);
-    for (const record of backup.messages) stores[MESSAGES_STORE].add(record);
+export async function importDatabaseBackup(backup: DatabaseBackup): Promise<void> {
+  const chatKeys = new Set(backup.chats.map((chat) => JSON.stringify([chat.namespace, chat.id])));
+  const messages = backup.messages.filter((message) => chatKeys.has(JSON.stringify([message.namespace, message.chatId])));
+
+  await enqueue(() => runTransaction([CHATS_STORE, MESSAGES_STORE], (stores) => {
+    for (const chat of backup.chats) {
+      stores[CHATS_STORE].put(chat);
+      const messagesForChat = IDBKeyRange.bound(
+        [chat.namespace, chat.id],
+        [chat.namespace, chat.id, []],
+      );
+      stores[MESSAGES_STORE].delete(messagesForChat);
+    }
+    for (const message of messages) stores[MESSAGES_STORE].add(message);
   }));
 }
 

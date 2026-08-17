@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { useSessionStore } from '../stores/session';
 import { useRouter } from 'vue-router';
 import SecureHeader from '../components/SecureHeader.vue';
-import { exportDatabaseBackup, replaceDatabaseFromBackup } from '../db';
+import { exportDatabaseBackup, importDatabaseBackup } from '../db';
 
 const router = useRouter();
 const session = useSessionStore();
@@ -49,9 +49,9 @@ async function importData(event: Event) {
     let backup;
     try { backup = JSON.parse(await file.text()); }
     catch { throw new Error('The selected file does not contain valid JSON.'); }
-    if (!window.confirm('Replace all current OproUI data with this backup? This cannot be undone.')) return;
-    await replaceDatabaseFromBackup(backup);
-    status.value = 'Database backup imported.';
+    if (!window.confirm('Import chats from this backup? Matching chat IDs will be replaced; settings and other chats will be kept.')) return;
+    await importDatabaseBackup(backup);
+    status.value = 'Chat backup imported.';
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : 'Unable to import the database.';
   } finally { busy.value = false; }
