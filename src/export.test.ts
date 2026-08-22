@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { formatChatExport, safeExportFilename } from './export';
+import { formatChatExport, formatLocalTimestamp, safeExportFilename } from './export';
 import type { Chat } from './types';
 
 describe('chat export', () => {
@@ -18,9 +18,10 @@ describe('chat export', () => {
       ],
     };
     expect(formatChatExport(chat)).toBe(
-      '[2026-07-16 10:05] [user] [model/a]\nHello\n--------------------\n\n' +
-      '[2026-07-16 10:05] [assistant] [AtlasCloud] [model/b]\n' +
-      'Reasoning:\nThinking\ncarefully\n\nResponse:\nHi\nthere\n--------------------\n\n',
+      '[2026-07-16 10:05] [user] [model/a]\n\n[prompt]\nHello\n\n' +
+      '----------------------------------------\n\n' +
+      '[2026-07-16 10:05] [assistant] [AtlasCloud] [model/b]\n\n' +
+      '[reasoning]\nThinking\ncarefully\n\n--------------------\n\n[response]\nHi\nthere',
     );
     vi.useRealTimers();
   });
@@ -36,8 +37,7 @@ describe('chat export', () => {
       messages: [{ id: 'a', role: 'assistant', model: 'model/a', content: 'Hi', createdAt: 0 }],
     };
     const output = formatChatExport(chat);
-    expect(output).toContain('[assistant] [Provider unknown] [model/a]');
-    expect(output).not.toContain('Reasoning:');
-    expect(output).toContain('Response:\nHi');
+    expect(output).toBe(`[${formatLocalTimestamp(0)}] [assistant] [Provider unknown] [model/a]\n\n[response]\nHi`);
+    expect(output).not.toContain('[reasoning]');
   });
 });

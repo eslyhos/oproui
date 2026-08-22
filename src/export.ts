@@ -10,11 +10,11 @@ export function formatLocalTimestamp(timestamp: number): string {
 export function formatChatExport(chat: Chat): string {
   return chat.messages.map((message) => {
     if (message.role === 'user') {
-      return `[${formatLocalTimestamp(message.createdAt)}] [${message.role}] [${message.model}]\n${message.content}\n--------------------\n\n`;
+      return `[${formatLocalTimestamp(message.createdAt)}] [${message.role}] [${message.model}]\n\n[prompt]\n${message.content}`;
     }
-    const reasoning = message.reasoning ? `Reasoning:\n${message.reasoning}\n\n` : '';
-    return `[${formatLocalTimestamp(message.createdAt)}] [${message.role}] [${message.provider || 'Provider unknown'}] [${message.model}]\n${reasoning}Response:\n${message.content}\n--------------------\n\n`;
-  }).join('');
+    const reasoning = message.reasoning ? `[reasoning]\n${message.reasoning}\n\n--------------------\n\n` : '';
+    return `[${formatLocalTimestamp(message.createdAt)}] [${message.role}] [${message.provider || 'Provider unknown'}] [${message.model}]\n\n${reasoning}[response]\n${message.content}`;
+  }).join('\n\n----------------------------------------\n\n');
 }
 
 export function safeExportFilename(title: string): string {
