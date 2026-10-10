@@ -307,7 +307,6 @@ export async function renameChat(username: string, id: string, title: string): P
     const chat = await getRecord<ChatRecord>(CHATS_STORE, [namespace, id]);
     if (!chat) return;
     chat.title = await encryptText(username, titleContext(id), title.trim() || randomTitle());
-    chat.updatedAt = Date.now();
     await runTransaction([CHATS_STORE], ({ chats: store }) => { store.put(chat); });
   });
 }
