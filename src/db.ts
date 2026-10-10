@@ -49,6 +49,13 @@ function titleContext(chatId: string): string { return `chat:${chatId}:title`; }
 function messageContext(chatId: string, messageId: string): string { return `message:${chatId}:${messageId}:content`; }
 function reasoningContext(chatId: string, messageId: string): string { return `message:${chatId}:${messageId}:reasoning`; }
 
+function randomTitle(): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let suffix = '';
+  for (let i = 0; i < 5; i += 1) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return `Chat ${suffix}`;
+}
+
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
@@ -244,10 +251,11 @@ export async function createChat(username: string, firstMessage: ChatMessage): P
   return enqueue(async () => {
     const namespace = await namespaceFor(username);
     const id = crypto.randomUUID();
+    const title = randomTitle();
     const chatRecord: ChatRecord = {
       namespace,
       id,
-      title: await encryptText(username, titleContext(id), 'Untitled'),
+      title: await encryptText(username, titleContext(id), title),
       createdAt: firstMessage.createdAt,
       updatedAt: firstMessage.createdAt,
     };
@@ -256,7 +264,7 @@ export async function createChat(username: string, firstMessage: ChatMessage): P
       stores[CHATS_STORE].add(chatRecord);
       stores[MESSAGES_STORE].add(messageRecord);
     });
-    return { id, title: 'Untitled', createdAt: firstMessage.createdAt, updatedAt: firstMessage.createdAt, messages: [firstMessage] };
+    return { id, title, createdAt: firstMessage.createdAt, updatedAt: firstMessage.createdAt, messages: [firstMessage] };
   });
 }
 
@@ -298,7 +306,7 @@ export async function renameChat(username: string, id: string, title: string): P
     const namespace = await namespaceFor(username);
     const chat = await getRecord<ChatRecord>(CHATS_STORE, [namespace, id]);
     if (!chat) return;
-    chat.title = await encryptText(username, titleContext(id), title.trim() || 'Untitled');
+    chat.title = await encryptText(username, titleContext(id), title.trim() || randomTitle());
     chat.updatedAt = Date.now();
     await runTransaction([CHATS_STORE], ({ chats: store }) => { store.put(chat); });
   });

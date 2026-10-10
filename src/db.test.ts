@@ -48,6 +48,7 @@ describe('per-record persistence', () => {
 
   it('stores titles and each message in independent encrypted values', async () => {
     const chat = await createChat('User', message('first', 'private first', 1));
+    expect(chat.title).toMatch(/^Chat [A-Za-z0-9]{5}$/);
     await appendMessage('User', chat.id, {
       ...message('second', 'private second', 2),
       role: 'assistant',
@@ -56,15 +57,15 @@ describe('per-record persistence', () => {
       totalTokens: 455,
     });
     expect(await getChat('User', chat.id)).toMatchObject({
-      title: 'Untitled',
+      title: chat.title,
       messages: [
         { content: 'private first' },
         { content: 'private second', provider: 'AtlasCloud', reasoning: 'private reasoning', totalTokens: 455 },
       ],
     });
-    expect(await getChats('User')).toEqual([{ id: chat.id, title: 'Untitled', createdAt: 1, updatedAt: 2 }]);
+    expect(await getChats('User')).toEqual([{ id: chat.id, title: chat.title, createdAt: 1, updatedAt: 2 }]);
     const raw = JSON.stringify([...(await rawRecords('chats')), ...(await rawRecords('messages'))]);
-    expect(raw).not.toContain('Untitled');
+    expect(raw).not.toContain(chat.title);
     expect(raw).not.toContain('private first');
     expect(raw).not.toContain('private second');
     expect(raw).not.toContain('private reasoning');
