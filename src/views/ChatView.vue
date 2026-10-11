@@ -18,6 +18,14 @@ const busy = ref(false);
 const error = ref('');
 const editingId = ref('');
 const editDraft = ref('');
+const expandedReasoning = ref<Set<string>>(new Set());
+const reasoningExpanded = (id: string) => expandedReasoning.value.has(id);
+function toggleReasoning(id: string) {
+  const next = new Set(expandedReasoning.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expandedReasoning.value = next;
+}
 const messageList = ref<HTMLElement | null>(null);
 const chatTitle = computed(() => chat.value?.title || 'New chat');
 const totalTokens = computed(() => accumulatedTotalTokens(chat.value?.messages ?? []));
@@ -137,8 +145,20 @@ onMounted(load);
         <textarea v-if='editingId === item.id' v-model='editDraft' class='edit-textarea' rows='5' aria-label='Edit prompt'></textarea>
         <template v-else>
           <div v-if='!isUser(item) && item.reasoning' class='reasoning-section'>
-            <div class='message-label'>Reasoning:</div>
-            <p class='message-content reasoning-content'>{{ item.reasoning }}</p>
+            <div class='reasoning-header'>
+              <span class='message-label'>Reasoning:</span>
+              <button
+                type='button'
+                class='reasoning-toggle'
+                :aria-expanded='reasoningExpanded(item.id)'
+                :aria-label='reasoningExpanded(item.id) ? "Hide reasoning" : "Show reasoning"'
+                @click='toggleReasoning(item.id)'
+              >
+                <span v-if='reasoningExpanded(item.id)' aria-hidden='true'>&#708;</span>
+                <span v-else aria-hidden='true'>&#709;</span>
+              </button>
+            </div>
+            <p v-if='reasoningExpanded(item.id)' class='message-content reasoning-content'>{{ item.reasoning }}</p>
           </div>
           <div v-if='!isUser(item)' class='message-label response-label'>Response:</div>
           <p class='message-content'>{{ item.content }}</p>
