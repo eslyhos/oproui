@@ -18,6 +18,7 @@ const busy = ref(false);
 const error = ref('');
 const editingId = ref('');
 const editDraft = ref('');
+const copiedId = ref('');
 const expandedReasoning = ref<Set<string>>(new Set());
 const reasoningExpanded = (id: string) => expandedReasoning.value.has(id);
 function toggleReasoning(id: string) {
@@ -98,6 +99,26 @@ async function sendPrompt() {
   }
   await complete(settings);
 }
+async function copyMessage(item: ChatMessage) {
+  // Only copy the response content; assistant reasoning is intentionally excluded.
+  const text = item.content;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+  copiedId.value = item.id;
+  window.setTimeout(() => {
+    if (copiedId.value === item.id) copiedId.value = '';
+  }, 1500);
+}
 function startEdit(item: ChatMessage) { editingId.value = item.id; editDraft.value = item.content; }
 function cancelEdit() { editingId.value = ''; editDraft.value = ''; }
 async function saveEdit(item: ChatMessage) {
@@ -163,11 +184,18 @@ onMounted(load);
           <div v-if='!isUser(item)' class='message-label response-label'>Response:</div>
           <p class='message-content'>{{ item.content }}</p>
         </template>
-        <div v-if='isUser(item)' class='message-actions'>
-          <button v-if='editingId !== item.id' type='button' @click='startEdit(item)'>Edit</button>
-          <template v-else>
-            <button type='button' :disabled='busy || !editDraft.trim()' @click='saveEdit(item)'>Save and regenerate</button>
-            <button type='button' @click='cancelEdit'>Cancel</button>
+        <div class='message-actions'>
+          <button
+            type='button'
+            :aria-label='copiedId === item.id ? "Copied" : "Copy message"'
+            @click='copyMessage(item)'
+          >{{ copiedId === item.id ? 'Copied' : 'Copy' }}</button>
+          <template v-if='isUser(item)'>
+            <button v-if='editingId !== item.id' type='button' @click='startEdit(item)'>Edit</button>
+            <template v-else>
+              <button type='button' :disabled='busy || !editDraft.trim()' @click='saveEdit(item)'>Save and regenerate</button>
+              <button type='button' @click='cancelEdit'>Cancel</button>
+            </template>
           </template>
         </div>
       </article>
