@@ -26,7 +26,7 @@ function requestExport() {
     <button class='icon-button menu-button' type='button' aria-label='Main menu' @click='goMenu'></button>
     <h1>{{ title }}</h1>
     <div class='header-actions'>
-      <button v-if='exportable' class='export-button' type='button' @click='requestExport'>Export</button>
+      <button v-if='exportable' class='export-button' type='button' @click='requestExport'>&#8593;</button>
       <button class='icon-button' type='button' aria-label='Return to login' @click='logout'>x</button>
     </div>
   </header>

@@ -19,6 +19,10 @@ const error = ref('');
 const editingId = ref('');
 const editDraft = ref('');
 const copiedId = ref('');
+const maximized = ref(false);
+function toggleMaximize() {
+  maximized.value = !maximized.value;
+}
 const expandedReasoning = ref<Set<string>>(new Set());
 const reasoningExpanded = (id: string) => expandedReasoning.value.has(id);
 function toggleReasoning(id: string) {
@@ -201,10 +205,17 @@ onMounted(load);
       </article>
       <p v-if='busy' class='waiting' role='status'>Waiting for response</p>
     </main>
-    <form class='composer' @submit.prevent='sendPrompt'>
+    <form class='composer' :class='{ maximized }' @submit.prevent='sendPrompt'>
       <p v-if='error' class='error composer-error' role='alert'>{{ error }}</p>
+      <button
+        type='button'
+        class='expand-button'
+        :aria-expanded='maximized'
+        :aria-label='maximized ? "Minimize" : "Expand"'
+        @click='toggleMaximize'
+      >&#9974;</button>
       <textarea v-model='prompt' rows='3' placeholder='Message OpenRouter' aria-label='Message' :disabled='busy'></textarea>
-      <button class='primary-button send-button' type='submit' :disabled='busy || !prompt.trim()'>Send</button>
+      <button class='primary-button send-button' type='submit' :disabled='busy || !prompt.trim()'>&#8674;</button>
     </form>
   </div>
 </template>
