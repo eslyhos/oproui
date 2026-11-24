@@ -1,0 +1,192 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: #202320;
+  background: #f5f6f2;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body { overflow: hidden; }
+button, input, textarea { font: inherit; font-size: 13px; }
+button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #c7cbc5;
+  border-radius: 9px;
+  color: #202320;
+  background: #fff;
+  cursor: pointer;
+}
+button:disabled { cursor: not-allowed; opacity: .55; }
+input, textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #c7cbc5;
+  border-radius: 9px;
+  color: #202320;
+  background: #fff;
+}
+textarea { resize: vertical; line-height: 1.45; }
+h1 { margin: 0; font-size: 13px; }
+.primary-button { color: #fff; border-color: #263b33; background: #263b33; }
+.error { margin: 0; color: #a12828; overflow-wrap: anywhere; }
+
+.center-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow: auto;
+}
+.card {
+  width: min(100%, 420px);
+  padding: 20px;
+  border: 1px solid #dadcd7;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(30, 40, 34, .07);
+}
+.login-card, .settings-form { display: grid; gap: 12px; }
+.login-card h1 { text-align: center; margin-bottom: 8px; }
+.menu-card { display: grid; gap: 18px; }
+.menu-content { display: grid; place-items: center; }
+.main-menu { display: grid; gap: 10px; }
+.menu-username { margin: 0 0 8px; text-align: center; }
+.main-menu button { min-height: 52px; }
+.menu-status { margin: 0; color: #59615a; text-align: center; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.secure-page {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.secure-header {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #d7dad5;
+  background: #eef0eb;
+}
+.secure-header h1 { overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.header-actions { display: flex; align-items: center; gap: 7px; }
+.icon-button { width: 40px; padding: 0; }
+.menu-button::before { content: '☰'; font-size: 18px; }
+.export-button { padding-inline: 12px; }
+.page-content { min-height: 0; padding: 18px 12px; overflow: auto; }
+.settings-form { margin: 0 auto; width: min(100%, 560px); }
+.form-actions { display: flex; align-items: center; gap: 12px; }
+
+.history-content { width: min(100%, 720px); margin: 0 auto; }
+.history-list { display: grid; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #d7dad5;
+  border-radius: 10px;
+  background: #fff;
+}
+.history-title { min-width: 0; overflow: hidden; border: 0; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.row-actions { display: flex; gap: 6px; }
+.row-actions button { padding-inline: 10px; }
+.danger-button { color: #9a2424; }
+.empty-state { margin: 20vh 0 0; color: #70766f; text-align: center; }
+
+.chat-page { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.token-summary {
+  padding: 6px 12px;
+  border-bottom: 1px solid #d7dad5;
+  color: #697069;
+  background: #f5f6f2;
+}
+.message-list {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.message {
+  width: min(92%, 760px);
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(30, 40, 34, .06);
+}
+.message.user { align-self: flex-end; background: #e7ede8; }
+.message.assistant { align-self: flex-start; }
+.message-meta { margin-bottom: 8px; color: #697069; }
+.message-content { margin: 0; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.message-label { margin-bottom: 4px; color: #59615a; font-weight: 600; }
+.reasoning-section { margin-bottom: 12px; }
+.reasoning-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.reasoning-header .message-label { margin-bottom: 0; }
+.reasoning-toggle {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  line-height: 1;
+}
+.reasoning-content { color: #59615a; font-style: italic; }
+.response-label { margin-top: 2px; }
+.message-actions { display: flex; gap: 7px; margin-top: 10px; }
+.message-actions button { min-height: 34px; padding: 5px 10px; }
+.edit-textarea { min-height: 110px; }
+.waiting { align-self: flex-start; margin: 0; padding: 12px; color: #59615a; }
+.composer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid #d7dad5;
+  background: #eef0eb;
+}
+.composer textarea { min-width: 0; max-height: 150px; resize: none; }
+.composer-error { grid-column: 1 / -1; }
+.expand-button { width: 40px; min-width: 40px; padding-inline: 0; line-height: 1; }
+.send-button { width: 66px; min-width: 66px; padding-inline: 8px; white-space: nowrap; }
+.composer.maximized {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 10px 12px;
+}
+.composer.maximized .composer-error { grid-column: 2; grid-row: 1; align-self: center; }
+.composer.maximized .expand-button { grid-column: 1; grid-row: 1; }
+.composer.maximized .send-button { grid-column: 3; grid-row: 1; }
+.composer.maximized textarea { grid-column: 1 / -1; grid-row: 2; height: 100%; max-height: none; }
+
+@media (max-width: 480px) {
+  input, textarea { font-size: 13px; }
+  .card { padding: 16px; }
+  .secure-header { padding-inline: 8px; }
+  .history-item { grid-template-columns: 1fr; }
+  .row-actions { justify-content: flex-end; }
+  .message { width: 96%; }
+  .composer { padding-inline: 8px; }
+}
